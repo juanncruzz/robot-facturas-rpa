@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Sistema de Proveedores - Carga de Facturas (DEMO)</title>
+<style>
+  body { font-family: Tahoma, Verdana, sans-serif; font-size: 13px; background: #d4d0c8; margin: 0; }
+  .barra { background: linear-gradient(#0a246a, #3a6ea5); color: #fff; padding: 6px 10px; font-weight: bold; }
+  .demo { background: #fff3c4; color: #6b5200; padding: 4px 10px; font-size: 12px; }
+  .ventana { background: #ece9d8; border: 2px outset #fff; width: 520px; margin: 30px auto; padding: 18px; }
+  h2 { font-size: 15px; margin: 0 0 14px; }
+  label { display: inline-block; width: 120px; }
+  input { font: inherit; padding: 3px; width: 260px; margin-bottom: 8px; border: 2px inset #fff; }
+  button { font: inherit; padding: 4px 16px; margin-right: 6px; }
+  .msg { margin-top: 10px; padding: 8px; display: none; }
+  .ok { background: #dff0d8; border: 1px solid #3c763d; }
+  .err { background: #f2dede; border: 1px solid #a94442; }
+  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 12px; }
+  th, td { border: 1px solid #999; padding: 3px 6px; text-align: left; }
+  th { background: #c0c0c0; }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<div class="barra">SISPROV v2.3 — Sistema de Proveedores</div>
+<div class="demo">Sistema de prueba para practicar RPA. Los datos se guardan solo en este navegador.</div>
+
+<!-- LOGIN -->
+<div class="ventana" id="pantallaLogin">
+  <h2>Ingreso al sistema</h2>
+  <label for="txtUsuario">Usuario:</label><input id="txtUsuario" autocomplete="off"><br>
+  <label for="txtClave">Contraseña:</label><input id="txtClave" type="password"><br>
+  <button id="btnIngresar">Ingresar</button>
+  <div class="msg err" id="msgLogin">Usuario o contraseña incorrectos.</div>
+  <p style="color:#555;font-size:11px">Usuario: <b>robot</b> · Contraseña: <b>demo123</b></p>
+</div>
+
+<!-- CARGA -->
+<div class="ventana oculto" id="pantallaCarga">
+  <h2>Carga de factura de proveedor</h2>
+  <label for="txtCuit">CUIT:</label><input id="txtCuit" placeholder="30-12345678-9"><br>
+  <label for="txtRazonSocial">Razón social:</label><input id="txtRazonSocial"><br>
+  <label for="txtNumero">Número:</label><input id="txtNumero" placeholder="0003-00001234"><br>
+  <label for="txtFecha">Fecha:</label><input id="txtFecha" placeholder="dd/mm/aaaa"><br>
+  <label for="txtTotal">Total:</label><input id="txtTotal" placeholder="12345,67"><br>
+  <button id="btnGuardar">Guardar</button>
+  <button id="btnLimpiar">Limpiar</button>
+  <button id="btnSalir">Salir</button>
+  <div class="msg ok" id="msgOk"></div>
+  <div class="msg err" id="msgError"></div>
+  <h2 style="margin-top:18px">Facturas cargadas (<span id="cantidad">0</span>)</h2>
+  <table id="tablaFacturas">
+    <thead><tr><th>Registro</th><th>CUIT</th><th>Número</th><th>Fecha</th><th>Total</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button id="btnBorrarTodo" style="margin-top:10px">Borrar todo (reiniciar demo)</button>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let facturas = [];
+  try { facturas = JSON.parse(localStorage.getItem("sisprov_facturas") || "[]"); } catch (e) {}
+  const guardar = () => { try { localStorage.setItem("sisprov_facturas", JSON.stringify(facturas)); } catch (e) {} };
+
+  function mostrar(id) {
+    ["pantallaLogin", "pantallaCarga"].forEach(p => $(p).classList.toggle("oculto", p !== id));
+  }
+  function render() {
+    $("cantidad").textContent = facturas.length;
+    $("tablaFacturas").querySelector("tbody").innerHTML = facturas.map(f =>
+      `<tr><td>${f.registro}</td><td>${f.cuit}</td><td>${f.numero}</td><td>${f.fecha}</td><td>${f.total}</td></tr>`).join("");
+  }
+  function aviso(tipo, texto) {
+    ["msgOk", "msgError"].forEach(m => { $(m).style.display = "none"; $(m).textContent = ""; });
+    const el = tipo === "ok" ? $("msgOk") : $("msgError");
+    el.textContent = texto; el.style.display = "block";
+  }
+  function limpiar() { ["txtCuit", "txtRazonSocial", "txtNumero", "txtFecha", "txtTotal"].forEach(i => $(i).value = ""); }
+
+  $("btnIngresar").onclick = () => {
+    if ($("txtUsuario").value === "robot" && $("txtClave").value === "demo123") {
+      $("msgLogin").style.display = "none"; mostrar("pantallaCarga"); render();
+    } else $("msgLogin").style.display = "block";
+  };
+  $("btnSalir").onclick = () => { $("txtClave").value = ""; mostrar("pantallaLogin"); };
+  $("btnLimpiar").onclick = limpiar;
+  $("btnBorrarTodo").onclick = () => { facturas = []; guardar(); render(); aviso("ok", "Datos borrados."); };
+
+  $("btnGuardar").onclick = () => {
+    const f = {
+      cuit: $("txtCuit").value.trim(), razon: $("txtRazonSocial").value.trim(),
+      numero: $("txtNumero").value.trim(), fecha: $("txtFecha").value.trim(), total: $("txtTotal").value.trim()
+    };
+    if (!/^\d{2}-\d{8}-\d$/.test(f.cuit)) return aviso("err", "Error: CUIT inválido.");
+    if (!f.razon) return aviso("err", "Error: falta la razón social.");
+    if (!/^\d{4}-\d{8}$/.test(f.numero)) return aviso("err", "Error: número inválido.");
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(f.fecha)) return aviso("err", "Error: fecha inválida.");
+    if (!/^[\d.]+(,\d{1,2})?$/.test(f.total)) return aviso("err", "Error: total inválido.");
+    if (facturas.some(x => x.cuit === f.cuit && x.numero === f.numero))
+      return aviso("err", "Error: la factura ya existe en el sistema.");
+    f.registro = "REG-" + String(facturas.length + 1).padStart(5, "0");
+    facturas.push(f); guardar(); render(); limpiar();
+    aviso("ok", "Factura guardada. Registro: " + f.registro);
+  };
+  [$("txtUsuario"), $("txtClave")].forEach(i => i.addEventListener("keydown", e => { if (e.key === "Enter") $("btnIngresar").click(); }));
+</script>
+</body>
+</html>
